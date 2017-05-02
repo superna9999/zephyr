@@ -11,3 +11,7 @@ endif
 ifeq ($(CONFIG_SOC_SERIES_STM32F4X),y)
 obj-$(CONFIG_SOC_FLASH_STM32) += flash_stm32f4x.o
 endif
+
+ifeq ($(CONFIG_SOC_SERIES_STM32L4X),y)
+obj-$(CONFIG_SOC_FLASH_STM32) += flash_stm32l4x.o
+endif
