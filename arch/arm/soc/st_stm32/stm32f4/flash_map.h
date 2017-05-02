@@ -21,7 +21,7 @@ struct stm32f4x_flash_sector {
 	}
 
 __attribute__((unused))
-struct stm32f4x_flash_sector stm32f4xx_sectors[] = {
+static struct stm32f4x_flash_sector stm32f4xx_sectors[] = {
 	STM32F4X_FLASH_SECTOR(0x00000, KB(16)),
 	STM32F4X_FLASH_SECTOR(0x04000, KB(16)),
 	STM32F4X_FLASH_SECTOR(0x08000, KB(16)),
@@ -41,7 +41,8 @@ struct stm32f4x_flash_sector stm32f4xx_sectors[] = {
 #define STM32F4X_FLASH_END	\
 	(stm32f4xx_sectors[ARRAY_SIZE(stm32f4xx_sectors) - 1].end)
 
-int stm32f4x_get_sector(off_t offset)
+__attribute__((unused))
+static int stm32f4x_get_sector(off_t offset)
 {
 	int i;
 
