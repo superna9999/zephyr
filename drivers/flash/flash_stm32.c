@@ -20,6 +20,8 @@ int flash_stm32_wait_flash_idle(struct flash_stm32_priv *p)
 {
 #if defined(CONFIG_SOC_SERIES_STM32F4X)
 	volatile struct stm32f4x_flash *regs = p->regs;
+#elif defined(CONFIG_SOC_SERIES_STM32F3X)
+	volatile struct stm32f3x_flash *regs = p->regs;
 #elif defined(CONFIG_SOC_SERIES_STM32L4X)
 	volatile struct stm32l4x_flash *regs = p->regs;
 #endif
@@ -42,6 +44,7 @@ int flash_stm32_wait_flash_idle(struct flash_stm32_priv *p)
 	return 0;
 }
 
+#if !defined(CONFIG_SOC_SERIES_STM32F3X)
 void flash_stm32_flush_caches(struct flash_stm32_priv *p)
 {
 #if defined(CONFIG_SOC_SERIES_STM32F4X)
@@ -64,6 +67,7 @@ void flash_stm32_flush_caches(struct flash_stm32_priv *p)
 		regs->acr.val |= FLASH_ACR_DCEN;
 	}
 }
+#endif
 
 static int flash_stm32_read(struct device *dev, off_t offset, void *data,
 	size_t len)
@@ -86,6 +90,8 @@ static int flash_stm32_write_protection(struct device *dev, bool enable)
 	struct flash_stm32_priv *p = dev->driver_data;
 #if defined(CONFIG_SOC_SERIES_STM32F4X)
 	volatile struct stm32f4x_flash *regs = p->regs;
+#elif defined(CONFIG_SOC_SERIES_STM32F3X)
+	volatile struct stm32f3x_flash *regs = p->regs;
 #elif defined(CONFIG_SOC_SERIES_STM32L4X)
 	volatile struct stm32l4x_flash *regs = p->regs;
 #endif
@@ -115,6 +121,10 @@ static int flash_stm32_write_protection(struct device *dev, bool enable)
 static struct flash_stm32_priv flash_data = {
 #if defined(CONFIG_SOC_SERIES_STM32F4X)
 	.regs = (struct stm32f4x_flash *) FLASH_R_BASE,
+#elif defined(CONFIG_SOC_SERIES_STM32F3X)
+	.regs = (struct stm32f3x_flash *) FLASH_R_BASE,
+	.pclken = { .bus = STM32_CLOCK_BUS_APB1,
+		    .enr = LL_AHB1_GRP1_PERIPH_FLASH },
 #elif defined(CONFIG_SOC_SERIES_STM32L4X)
 	.regs = (struct stm32l4x_flash *) FLASH_R_BASE,
 	.pclken = { .bus = STM32_CLOCK_BUS_AHB1,
@@ -132,7 +142,7 @@ static const struct flash_driver_api flash_stm32_api = {
 static int stm32_flash_init(struct device *dev)
 {
 	struct flash_stm32_priv *p = dev->driver_data;
-#if defined(CONFIG_SOC_SERIES_STM32L4X)
+#if defined(CONFIG_SOC_SERIES_STM32F3X) || defined(CONFIG_SOC_SERIES_STM32L4X)
 	struct device *clk = device_get_binding(STM32_CLOCK_CONTROL_NAME);
 
 	/* enable clock */
