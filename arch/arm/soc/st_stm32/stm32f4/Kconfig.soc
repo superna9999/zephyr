@@ -32,6 +32,28 @@ config STM32_ARM_MPU_ENABLE
 	  Enable MPU
 
 choice
+prompt "STM32F4x Flash MPU Permissions"
+depends on STM32_ARM_MPU_ENABLE
+default STM32_MPU_FLASH_RO
+
+config STM32_MPU_FLASH_RO
+	bool "Read-Only"
+
+config STM32_MPU_FLASH_P_RW_U_NA
+	bool "Privileged Read Write, Unprivileged No Access"
+
+config STM32_MPU_FLASH_P_RW_U_RO
+	bool "Privileged Read Write, Unprivileged Read Only"
+
+config STM32_MPU_FLASH_FULL_ACCESS
+	bool "Privileged Read Write, Unprivileged Read Write"
+
+config STM32_MPU_FLASH_P_RO_U_NA
+	bool "Privileged Read Only, Unprivileged No Access"
+
+endchoice
+
+choice
 prompt "Configure Bootloader Options"
 depends on MPU_ENABLE
 
