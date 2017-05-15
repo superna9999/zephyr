@@ -1,0 +1,181 @@
+# Kconfig - LIS3DSH Three Axis 'nano' Accelerometer configuration options
+
+#
+# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2017 BayLibre, SAS
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig LIS3DSH
+	bool
+	prompt "LIS3DSH Three Axis 'nano' Accelerometer"
+	depends on SENSOR && I2C
+	default n
+	help
+	  Enable driver for LIS3DSH I2C-based triaxial accelerometer sensor.
+
+config LIS3DSH_NAME
+	string
+	prompt "Driver name"
+	default "LIS3DSH"
+	depends on LIS3DSH
+	help
+	  Device name with which the LIS3DSH sensor is identified.
+
+config LIS3DSH_I2C_ADDR
+	hex
+	prompt "LIS3DSH I2C address"
+	depends on LIS3DSH
+	default 0x1e
+	help
+	  I2C address of the LIS3DSH sensor.
+
+	  0x1e: Choose this option if the SDO pin is pulled to GND.
+	  0x1d: Choose this option if the SDO pin is pulled to VDDIO.
+
+config LIS3DSH_I2C_MASTER_DEV_NAME
+	string
+	prompt "I2C master where LIS3DSH is connected"
+	depends on LIS3DSH
+	default "I2C_0"
+	help
+	  Specify the device name of the I2C master device to which LIS3DSH is
+	  connected.
+
+choice
+	prompt "Trigger mode"
+	depends on LIS3DSH
+	default LIS3DSH_TRIGGER_GLOBAL_THREAD
+	help
+	  Specify the type of triggering to be used by the driver.
+
+config LIS3DSH_TRIGGER_NONE
+	bool
+	prompt "No trigger"
+
+config LIS3DSH_TRIGGER_GLOBAL_THREAD
+	bool
+	prompt "Use global thread"
+	depends on GPIO
+	select LIS3DSH_TRIGGER
+
+config LIS3DSH_TRIGGER_OWN_THREAD
+	bool
+	prompt "Use own thread"
+	depends on GPIO
+	select LIS3DSH_TRIGGER
+
+endchoice
+
+config LIS3DSH_TRIGGER
+	bool
+	depends on LIS3DSH
+
+config LIS3DSH_GPIO_DEV_NAME
+	string
+	prompt "GPIO device"
+	default "GPIO_0"
+	depends on LIS3DSH && LIS3DSH_TRIGGER
+	help
+	  The device name of the GPIO device to which the LIS3DSH interrupt pins
+	  are connected.
+
+config LIS3DSH_GPIO_PIN_NUM
+	int
+	prompt "Interrupt GPIO pin number"
+	default 0
+	depends on LIS3DSH && LIS3DSH_TRIGGER
+	help
+	  The number of the GPIO on which the interrupt signal from the LIS3DSH
+	  chip will be received.
+
+config LIS3DSH_THREAD_PRIORITY
+	int
+	prompt "Thread priority"
+	depends on LIS3DSH && LIS3DSH_TRIGGER_OWN_THREAD
+	default 10
+	help
+	  Priority of thread used by the driver to handle interrupts.
+
+config LIS3DSH_THREAD_STACK_SIZE
+	int
+	prompt "Thread stack size"
+	depends on LIS3DSH && LIS3DSH_TRIGGER_OWN_THREAD
+	default 1024
+	help
+	  Stack size of thread used by the driver to handle interrupts.
+
+choice
+	prompt "Acceleration measurement range"
+	depends on LIS3DSH
+	default LIS3DSH_ACCEL_RANGE_2G
+	help
+	  Measurement full scale range for acceleration values.
+
+config LIS3DSH_ACCEL_RANGE_2G
+	bool
+	prompt "+/-2g"
+
+config LIS3DSH_ACCEL_RANGE_4G
+	bool
+	prompt "+/-4g"
+
+config LIS3DSH_ACCEL_RANGE_6G
+	bool
+	prompt "+/-6g"
+
+config LIS3DSH_ACCEL_RANGE_8G
+	bool
+	prompt "+/-8g"
+
+config LIS3DSH_ACCEL_RANGE_16G
+	bool
+	prompt "+/-16g"
+
+endchoice
+
+choice
+	prompt "Data rate frequency"
+	depends on LIS3DSH
+	default LIS3DSH_ODR_1
+	help
+	  Data rate frequency of acceleration data.
+
+config LIS3DSH_ODR_1
+	bool
+	prompt "3.125Hz"
+
+config LIS3DSH_ODR_2
+	bool
+	prompt "6.25Hz"
+
+config LIS3DSH_ODR_3
+	bool
+	prompt "12.5Hz"
+
+config LIS3DSH_ODR_4
+	bool
+	prompt "25Hz"
+
+config LIS3DSH_ODR_5
+	bool
+	prompt "50Hz"
+
+config LIS3DSH_ODR_6
+	bool
+	prompt "100Hz"
+
+config LIS3DSH_ODR_7
+	bool
+	prompt "400Hz"
+
+config LIS3DSH_ODR_8
+	bool
+	prompt "800Hz"
+
+config LIS3DSH_ODR_9
+	bool
+	prompt "1.6KHz"
+
+endchoice

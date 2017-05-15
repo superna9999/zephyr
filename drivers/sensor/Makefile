@@ -17,6 +17,7 @@ obj-$(CONFIG_HTS221) += hts221/
 obj-$(CONFIG_ISL29035) += isl29035/
 obj-$(CONFIG_LIS2DH) += lis2dh/
 obj-$(CONFIG_LIS3DH) += lis3dh/
+obj-$(CONFIG_LIS3DSH) += lis3dsh/
 obj-$(CONFIG_LIS3MDL) += lis3mdl/
 obj-$(CONFIG_LPS25HB) += lps25hb/
 obj-$(CONFIG_LSM6DS0) += lsm6ds0/
