@@ -1,0 +1,400 @@
+# Kconfig - STM32 Flexible Memory Controller configuration
+#
+# Copyright (c) 2017 BayLibre, SAS
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig STM32_FMC
+	bool "STM32 Flexible Memory Controller driver"
+	default n
+	depends on SOC_FAMILY_STM32 && SOC_STM32L496XG
+	help
+	  This option enables the FMC driver for STM32 family of
+	  processors.
+
+if STM32_FMC
+
+# NOR/SRAM Bank 1
+
+config STM32_FMC_NOR_SRAM_BANK_1
+	bool "Enable STM32 Flexible Memory Controller NOR/SRAM Bank 1"
+	default n
+	depends on STM32_FMC
+	help
+	  Enable support for the Flexible Memory Controller Bank 1. Say y
+	  here if you want to enable the Bank 1.
+
+config STM32_FMC_NOR_SRAM_BANK_1_NAME
+	string "Device Name for STM32 FMC NOR/SRAM Bank 1"
+	default "NORSRAM_1"
+	help
+	  This is the device name for Flexible Memory Controller Bank 1, and
+	  is included in the device struct.
+
+choice
+	prompt "Bank 1 Device Type"
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	default STM32_FMC_NOR_SRAM_BANK_1_TYPE_SRAM
+	help
+	  Select Memory device type connected to the Bank 1 of the STM32
+	  Flexible Memory Controller.
+
+config STM32_FMC_NOR_SRAM_BANK_1_TYPE_SRAM
+	bool "SRAM"
+
+config STM32_FMC_NOR_SRAM_BANK_1_TYPE_PSRAM
+	bool "PSRAM"
+
+config STM32_FMC_NOR_SRAM_BANK_1_TYPE_NOR
+	bool "NOR"
+
+endchoice
+
+config STM32_FMC_NOR_SRAM_BANK_1_ADDR_SETUP_TIME
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	int "Bank 1 Address Setup Time"
+	range 0 15
+
+config STM32_FMC_NOR_SRAM_BANK_1_ADDR_HOLD_TIME
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	int "Bank 1 Address Hold Time"
+	range 0 15
+
+config STM32_FMC_NOR_SRAM_BANK_1_DATA_SETUP_TIME
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	int "Bank 1 Data Setup Time"
+	range 0 255
+
+config STM32_FMC_NOR_SRAM_BANK_1_DATA_LATENCY
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	int "Bank 1 Data Latency"
+	range 2 17
+
+config STM32_FMC_NOR_SRAM_BANK_1_BUS_TURNAROUND_DURATION
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	int "Bank 1 Bus Turnaround Duration"
+	range 0 15
+
+config STM32_FMC_NOR_SRAM_BANK_1_CLK_DIVISION
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	int "Bank 1 Clock Output Division"
+	range 2 16
+
+choice
+	prompt "Bank 1 Access Mode"
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+
+config STM32_FMC_NOR_SRAM_BANK_1_ACCESS_MODE_A
+	bool "Access Mode A"
+
+config STM32_FMC_NOR_SRAM_BANK_1_ACCESS_MODE_B
+	bool "Access Mode B"
+
+config STM32_FMC_NOR_SRAM_BANK_1_ACCESS_MODE_C
+	bool "Access Mode C"
+
+config STM32_FMC_NOR_SRAM_BANK_1_ACCESS_MODE_D
+	bool "Access Mode D"
+
+endchoice
+
+config STM32_FMC_NOR_SRAM_BANK_1_ADDRESS_MUX_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	bool "Bank 1 Address Mux Enable"
+	default n
+
+config STM32_FMC_NOR_SRAM_BANK_1_BURST_ACCESS_MODE_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	bool "Bank 1 Burst Access Mode Enable"
+	default n
+
+choice
+	prompt "Bank 1 Wait Signal Polarity"
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	default STM32_FMC_NOR_SRAM_BANK_1_WAIT_SIGNAL_POLARITY_LOW
+
+config STM32_FMC_NOR_SRAM_BANK_1_WAIT_SIGNAL_POLARITY_LOW
+	bool "Low"
+
+config STM32_FMC_NOR_SRAM_BANK_1_WAIT_SIGNAL_POLARITY_HIGH
+	bool "High"
+
+endchoice
+
+choice
+	prompt "Bank 1 Wait Timing Configuration"
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	default STM32_FMC_NOR_SRAM_BANK_1_TIMING_BEFORE_WS
+
+config STM32_FMC_NOR_SRAM_BANK_1_TIMING_BEFORE_WS
+	bool "Before WS"
+
+config STM32_FMC_NOR_SRAM_BANK_1_TIMING_DURING_WS
+	bool "During WS"
+
+endchoice
+
+config STM32_FMC_NOR_SRAM_BANK_1_WRITE_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	bool "Bank 1 Default Write Enable"
+	default y
+
+config STM32_FMC_NOR_SRAM_BANK_1_WAIT_SIGNAL_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	bool "Bank 1 Wait Signal Enable"
+	default n
+
+config STM32_FMC_NOR_SRAM_BANK_1_ASYNCHRONOUS_WAIT_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	bool "Bank 1 Asynchronous Wait Enable"
+	default n
+
+config STM32_FMC_NOR_SRAM_BANK_1_WRITE_BURST_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	bool "Bank 1 Write Burst Enable"
+	default n
+
+choice
+	prompt "Bank 1 Continous Clock"
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	default STM32_FMC_NOR_SRAM_BANK_1_CONTINUOUS_CLOCK_SYNC_ONLY
+
+config STM32_FMC_NOR_SRAM_BANK_1_CONTINUOUS_CLOCK_SYNC_ONLY
+	bool "Sync Only"
+
+config STM32_FMC_NOR_SRAM_BANK_1_CONTINUOUS_CLOCK_SYNC_ASYNC
+	bool "Async"
+
+endchoice
+
+choice
+	prompt "Bank 1 Page Size"
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	default STM32_FMC_NOR_SRAM_BANK_1_PAGE_SIZE_NONE
+
+config STM32_FMC_NOR_SRAM_BANK_1_PAGE_SIZE_NONE
+	bool "NONE"
+
+config STM32_FMC_NOR_SRAM_BANK_1_PAGE_SIZE_128
+	bool "128"
+
+config STM32_FMC_NOR_SRAM_BANK_1_PAGE_SIZE_256
+	bool "256"
+
+config STM32_FMC_NOR_SRAM_BANK_1_PAGE_SIZE_512
+	bool "512"
+
+config STM32_FMC_NOR_SRAM_BANK_1_PAGE_SIZE_1024
+	bool "1024"
+
+endchoice
+
+choice
+	prompt "Bank 1 Memory Width"
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	default STM32_FMC_NOR_SRAM_BANK_1_16BIT
+
+config STM32_FMC_NOR_SRAM_BANK_1_8BIT
+	bool "8bit"
+
+config STM32_FMC_NOR_SRAM_BANK_1_16BIT
+	bool "16bit"
+
+config STM32_FMC_NOR_SRAM_BANK_1_32BIT
+	bool "32bit"
+
+endchoice
+
+# NOR/SRAM Bank 2
+
+config STM32_FMC_NOR_SRAM_BANK_2
+	bool "Enable STM32 Flexible Memory Controller NOR/SRAM Bank 2"
+	default n
+	depends on STM32_FMC
+	help
+	  Enable support for the Flexible Memory Controller Bank 2. Say y
+	  here if you want to enable the Bank 2.
+
+config STM32_FMC_NOR_SRAM_BANK_2_NAME
+	string "Device Name for STM32 FMC NOR/SRAM Bank 2"
+	default "NORSRAM_2"
+	help
+	  This is the device name for Flexible Memory Controller Bank 2, and
+	  is included in the device struct.
+
+choice
+	prompt "Bank 2 Device Type"
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	default STM32_FMC_NOR_SRAM_BANK_2_TYPE_SRAM
+	help
+	  Select Memory device type connected to the Bank 2 of the STM32
+	  Flexible Memory Controller.
+
+config STM32_FMC_NOR_SRAM_BANK_2_TYPE_SRAM
+	bool "SRAM"
+
+config STM32_FMC_NOR_SRAM_BANK_2_TYPE_PSRAM
+	bool "PSRAM"
+
+config STM32_FMC_NOR_SRAM_BANK_2_TYPE_NOR
+	bool "NOR"
+
+endchoice
+
+config STM32_FMC_NOR_SRAM_BANK_2_ADDR_SETUP_TIME
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	int "Bank 2 Address Setup Time"
+	range 0 15
+
+config STM32_FMC_NOR_SRAM_BANK_2_ADDR_HOLD_TIME
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	int "Bank 2 Address Hold Time"
+	range 0 15
+
+config STM32_FMC_NOR_SRAM_BANK_2_DATA_SETUP_TIME
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	int "Bank 2 Data Setup Time"
+	range 0 255
+
+config STM32_FMC_NOR_SRAM_BANK_2_DATA_LATENCY
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	int "Bank 2 Data Latency"
+	range 2 17
+
+config STM32_FMC_NOR_SRAM_BANK_2_BUS_TURNAROUND_DURATION
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	int "Bank 2 Bus Turnaround Duration"
+	range 0 15
+
+config STM32_FMC_NOR_SRAM_BANK_2_CLK_DIVISION
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	int "Bank 2 Clock Output Division"
+	range 2 16
+
+choice
+	prompt "Bank 2 Access Mode"
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+
+config STM32_FMC_NOR_SRAM_BANK_2_ACCESS_MODE_A
+	bool "Access Mode A"
+
+config STM32_FMC_NOR_SRAM_BANK_2_ACCESS_MODE_B
+	bool "Access Mode B"
+
+config STM32_FMC_NOR_SRAM_BANK_2_ACCESS_MODE_C
+	bool "Access Mode C"
+
+config STM32_FMC_NOR_SRAM_BANK_2_ACCESS_MODE_D
+	bool "Access Mode D"
+
+endchoice
+
+config STM32_FMC_NOR_SRAM_BANK_2_ADDRESS_MUX_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	bool "Bank 2 Address Mux Enable"
+	default n
+
+config STM32_FMC_NOR_SRAM_BANK_2_BURST_ACCESS_MODE_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	bool "Bank 2 Burst Access Mode Enable"
+	default n
+
+choice
+	prompt "Bank 2 Wait Signal Polarity"
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	default STM32_FMC_NOR_SRAM_BANK_2_WAIT_SIGNAL_POLARITY_LOW
+
+config STM32_FMC_NOR_SRAM_BANK_2_WAIT_SIGNAL_POLARITY_LOW
+	bool "Low"
+
+config STM32_FMC_NOR_SRAM_BANK_2_WAIT_SIGNAL_POLARITY_HIGH
+	bool "High"
+
+endchoice
+
+choice
+	prompt "Bank 2 Wait Timing Configuration"
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	default STM32_FMC_NOR_SRAM_BANK_2_TIMING_BEFORE_WS
+
+config STM32_FMC_NOR_SRAM_BANK_2_TIMING_BEFORE_WS
+	bool "Before WS"
+
+config STM32_FMC_NOR_SRAM_BANK_2_TIMING_DURING_WS
+	bool "During WS"
+
+endchoice
+
+config STM32_FMC_NOR_SRAM_BANK_2_WRITE_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	bool "Bank 2 Default Write Enable"
+	default y
+
+config STM32_FMC_NOR_SRAM_BANK_2_WAIT_SIGNAL_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	bool "Bank 2 Wait Signal Enable"
+	default n
+
+config STM32_FMC_NOR_SRAM_BANK_2_ASYNCHRONOUS_WAIT_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	bool "Bank 2 Asynchronous Wait Enable"
+	default n
+
+config STM32_FMC_NOR_SRAM_BANK_2_WRITE_BURST_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	bool "Bank 2 Write Burst Enable"
+	default n
+
+choice
+	prompt "Bank 2 Continous Clock"
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	default STM32_FMC_NOR_SRAM_BANK_2_CONTINUOUS_CLOCK_SYNC_ONLY
+
+config STM32_FMC_NOR_SRAM_BANK_2_CONTINUOUS_CLOCK_SYNC_ONLY
+	bool "Sync Only"
+
+config STM32_FMC_NOR_SRAM_BANK_2_CONTINUOUS_CLOCK_SYNC_ASYNC
+	bool "Async"
+
+endchoice
+
+choice
+	prompt "Bank 2 Page Size"
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	default STM32_FMC_NOR_SRAM_BANK_2_PAGE_SIZE_NONE
+
+config STM32_FMC_NOR_SRAM_BANK_2_PAGE_SIZE_NONE
+	bool "NONE"
+
+config STM32_FMC_NOR_SRAM_BANK_2_PAGE_SIZE_128
+	bool "128"
+
+config STM32_FMC_NOR_SRAM_BANK_2_PAGE_SIZE_256
+	bool "256"
+
+config STM32_FMC_NOR_SRAM_BANK_2_PAGE_SIZE_512
+	bool "512"
+
+config STM32_FMC_NOR_SRAM_BANK_2_PAGE_SIZE_1024
+	bool "1024"
+
+endchoice
+
+choice
+	prompt "Bank 2 Memory Width"
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	default STM32_FMC_NOR_SRAM_BANK_2_16BIT
+
+config STM32_FMC_NOR_SRAM_BANK_2_8BIT
+	bool "8bit"
+
+config STM32_FMC_NOR_SRAM_BANK_2_16BIT
+	bool "16bit"
+
+config STM32_FMC_NOR_SRAM_BANK_2_32BIT
+	bool "32bit"
+
+endchoice
+
+endif # UART_STM32

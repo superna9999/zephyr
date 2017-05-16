@@ -30,4 +30,5 @@ obj-$(CONFIG_PINMUX) += pinmux/
 obj-$(CONFIG_DMA) += dma/
 obj-$(CONFIG_USB) += usb/
 obj-$(CONFIG_CRYPTO) += crypto/
+obj-$(CONFIG_MEMORY) += memory/
 obj-y += crc/

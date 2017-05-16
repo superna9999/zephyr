@@ -74,4 +74,6 @@ source "drivers/crypto/Kconfig"
 
 source "drivers/display/Kconfig"
 
+source "drivers/memory/Kconfig"
+
 endmenu

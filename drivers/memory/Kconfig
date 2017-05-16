@@ -1,0 +1,22 @@
+# Kconfig - memory controllers driver
+
+#
+# Copyright (c) 2017 BayLibre, SAS.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig MEMORY
+	bool
+	prompt "Memory Controllers Drivers"
+	default n
+	help
+	Enable options for memory controllers drivers.
+
+if MEMORY
+
+comment "Memory Controller Drivers"
+
+source "drivers/memory/Kconfig.stm32"
+
+endif
