@@ -39,6 +39,14 @@ enum {
 };
 
 enum {
+	STM32L4X_OSPEEDR_LOW		= 0x0,
+	STM32L4X_OSPEEDR_MEDIUM		= 0x1,
+	STM32L4X_OSPEEDR_HIGH		= 0x2,
+	STM32L4X_OSPEEDR_VERY_HIGH	= 0x3,
+	STM32L4X_OSPEEDR_MASK		= 0x3,
+};
+
+enum {
 	STM32L4X_PUPDR_NO_PULL		= 0x0,
 	STM32L4X_PUPDR_PULL_UP		= 0x1,
 	STM32L4X_PUPDR_PULL_DOWN	= 0x2,
@@ -108,6 +116,11 @@ static u32_t func_to_otype(int conf)
 	return STM32L4X_OTYPER_PUSH_PULL;
 }
 
+static u32_t func_to_ospeed(__unused int conf, __unused unsigned int afnum)
+{
+	return STM32L4X_OSPEEDR_VERY_HIGH;
+}
+
 static u32_t func_to_pupd(int conf)
 {
 	switch (conf) {
@@ -160,7 +173,7 @@ int stm32_gpio_configure(u32_t *base_addr, int pin, int pinconf, int afnum)
 {
 	volatile struct stm32l4x_gpio *gpio =
 		(struct stm32l4x_gpio *)(base_addr);
-	unsigned int mode, otype, pupd;
+	unsigned int mode, otype, ospeed, pupd;
 	unsigned int pin_shift = pin << 1;
 	unsigned int afr_bank = pin / 8;
 	unsigned int afr_shift = (pin % 8) << 2;
@@ -168,6 +181,7 @@ int stm32_gpio_configure(u32_t *base_addr, int pin, int pinconf, int afnum)
 
 	mode = func_to_mode(pinconf, afnum);
 	otype = func_to_otype(pinconf);
+	ospeed = func_to_ospeed(pinconf, afnum);
 	pupd = func_to_pupd(pinconf);
 
 	scratch = gpio->moder & ~(STM32L4X_MODER_MASK << pin_shift);
@@ -175,6 +189,9 @@ int stm32_gpio_configure(u32_t *base_addr, int pin, int pinconf, int afnum)
 
 	scratch = gpio->otyper & ~(STM32L4X_OTYPER_MASK << pin);
 	gpio->otyper = scratch | (otype << pin);
+
+	scratch = gpio->ospeedr & ~(STM32L4X_OSPEEDR_MASK << pin);
+	gpio->ospeedr = scratch | (ospeed << pin);
 
 	scratch = gpio->pupdr & ~(STM32L4X_PUPDR_MASK << pin_shift);
 	gpio->pupdr = scratch | (pupd << pin_shift);

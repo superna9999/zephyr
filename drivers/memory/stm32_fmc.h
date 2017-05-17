@@ -165,6 +165,7 @@ struct stm32_fmc_config {
 	uint32_t bankid;
 	/* clock subsystem driving this peripheral */
 	struct stm32_pclken pclken;
+	struct stm32_pclken pclken_pwr;
 	/* Configuration */
 	FMC_NORSRAM_InitTypeDef config;
 	/* Timings */

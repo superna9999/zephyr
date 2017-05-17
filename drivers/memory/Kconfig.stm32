@@ -154,6 +154,11 @@ config STM32_FMC_NOR_SRAM_BANK_1_WRITE_BURST_ENABLE
 	depends on STM32_FMC_NOR_SRAM_BANK_1
 	bool "Bank 1 Write Burst Enable"
 	default n
+	
+config STM32_FMC_NOR_SRAM_BANK_1_WRITE_FIFO_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_1
+	bool "Bank 1 Write Fifo Enable"
+	default n
 
 choice
 	prompt "Bank 1 Continous Clock"
@@ -344,6 +349,11 @@ config STM32_FMC_NOR_SRAM_BANK_2_ASYNCHRONOUS_WAIT_ENABLE
 config STM32_FMC_NOR_SRAM_BANK_2_WRITE_BURST_ENABLE
 	depends on STM32_FMC_NOR_SRAM_BANK_2
 	bool "Bank 2 Write Burst Enable"
+	default n
+	
+config STM32_FMC_NOR_SRAM_BANK_2_WRITE_FIFO_ENABLE
+	depends on STM32_FMC_NOR_SRAM_BANK_2
+	bool "Bank 2 Write Fifo Enable"
 	default n
 
 choice

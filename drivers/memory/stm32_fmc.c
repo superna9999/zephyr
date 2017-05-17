@@ -38,9 +38,15 @@ static int stm32_fmc_init(struct device *dev)
 
 	data->clock = clk;
 
-	/* enable clock */
+	/* enable clocks */
 	clock_control_on(data->clock,
 		(clock_control_subsys_t *)&cfg->pclken);
+
+	clock_control_on(data->clock,
+		(clock_control_subsys_t *)&cfg->pclken_pwr);
+
+	/* Enable VDDIO2 Power */
+	HAL_PWREx_EnableVddIO2();
 
 	memcpy(&init, &cfg->config, sizeof(FMC_NORSRAM_InitTypeDef));
 	memcpy(&timings, &cfg->timings, sizeof(FMC_NORSRAM_TimingTypeDef));
@@ -54,6 +60,9 @@ static int stm32_fmc_init(struct device *dev)
 		return -EIO;
 	}
 
+	FMC_NORSRAM_Extended_Timing_Init(FMC_NORSRAM_EXTENDED_DEVICE,
+					 &timings, init.NSBank,
+					 FMC_EXTENDED_MODE_DISABLE);
 	__FMC_NORSRAM_ENABLE(FMC_NORSRAM_DEVICE, init.NSBank);
 
 	return 0;
@@ -62,8 +71,10 @@ static int stm32_fmc_init(struct device *dev)
 #ifdef CONFIG_STM32_FMC_NOR_SRAM_BANK_1
 
 static const struct stm32_fmc_config stm32_fmc_cfg_1 = {
-	.pclken = { .bus = STM32_CLOCK_BUS_APB1,
-		    .enr = LL_APB1_GRP1_PERIPH_I2C1 },
+	.pclken = { .bus = STM32_CLOCK_BUS_AHB3,
+		    .enr = LL_AHB3_GRP1_PERIPH_FMC },
+	.pclken_pwr = { .bus = STM32_CLOCK_BUS_APB1,
+		      .enr = LL_APB1_GRP1_PERIPH_PWR },
 	.config = {
 		.NSBank             = FMC_NORSRAM_BANK1,
 #ifdef CONFIG_STM32_FMC_NOR_SRAM_BANK_1_ADDRESS_MUX_ENABLE
@@ -90,7 +101,7 @@ static const struct stm32_fmc_config stm32_fmc_cfg_1 = {
 		.WriteBurst         = FMC_WRITE_BURST_ENABLE,
 #endif
 		.ContinuousClock    = FMC_NOR_SRAM_BANK_1_CLOCK_SYNC,
-#ifdef CONFIG_STM32_FMC_NOR_SRAM_BANK_1_ADDRESS_MUX_ENABLE
+#ifdef CONFIG_STM32_FMC_NOR_SRAM_BANK_1_WRITE_FIFO_ENABLE
 		.WriteFifo          = FMC_WRITE_FIFO_ENABLE,
 #endif
 		.PageSize 	    = FMC_NOR_SRAM_BANK_1_PAGE_SIZE,
