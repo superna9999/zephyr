@@ -31,6 +31,8 @@
 #define EXTI_LINES 29
 #elif CONFIG_SOC_SERIES_STM32F4X
 #define EXTI_LINES 23
+#elif defined(CONFIG_SOC_SERIES_STM32L0X)
+#define EXTI_LINES 30
 #elif defined(CONFIG_SOC_SERIES_STM32L4X)
 #define EXTI_LINES 40
 #endif
@@ -132,6 +134,23 @@ void stm32_exti_enable(int line)
 			irqnum = STM32F4_IRQ_EXTI22;
 			break;
 		}
+	}
+#elif defined(CONFIG_SOC_SERIES_STM32L0X)
+	if (line >= 15 && line <= 4) {
+		irqnum = STM32L0_IRQ_EXTI_15_4;
+	} else if (line >= 3 && line <= 2) {
+		irqnum = STM32L0_IRQ_EXTI_3_2;
+	} else if (line < 2) {
+		/* pins 0..4 are mapped to EXTI0.. EXTI4 */
+		irqnum = STM32L0_IRQ_EXTI_1_0;
+	} else {/* > 15 are not mapped on an IRQ */
+		/*
+		 * On STM32L0X, this function also support enabling EXTI
+		 * lines that are not connected to an IRQ. This might be used
+		 * by other drivers or boards, to allow the device wakeup on
+		 * some non-GPIO signals.
+		 */
+		return;
 	}
 #elif defined(CONFIG_SOC_SERIES_STM32L4X)
 	if (line >= 5 && line <= 9) {
