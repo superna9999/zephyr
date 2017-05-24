@@ -1,0 +1,19 @@
+# Kconfig - ST Microelectronics STM32L053x8 MCU
+#
+# Copyright (c) 2016 BayLibre, SAS
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+if SOC_STM32L053X8
+
+config SOC
+	string
+	default stm32l053xx
+
+config NUM_IRQS
+	int
+	default 39
+
+endif # SOC_STM32L053X8
+

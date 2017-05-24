@@ -1,0 +1,16 @@
+# Kconfig - ST Microelectronics STM32L0 MCU line
+#
+# Copyright (c) 2016 Open-RnD Sp. z o.o.
+# Copyright (c) 2016 BayLibre, SAS
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+if SOC_SERIES_STM32L0X
+
+source "arch/arm/soc/st_stm32/stm32l0/Kconfig.defconfig.stm32l0*"
+
+config SOC_SERIES
+	default stm32l0
+
+endif # SOC_SERIES_STM32L0X
