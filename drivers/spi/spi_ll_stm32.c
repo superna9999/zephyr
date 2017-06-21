@@ -132,11 +132,6 @@ static int spi_stm32_configure(struct spi_config *config)
 #endif
 	LL_SPI_SetStandard(spi, LL_SPI_PROTOCOL_MOTOROLA);
 
-	data->rx.len = 0;
-	data->rx.buf = NULL;
-	data->tx.len = 0;
-	data->tx.buf = NULL;
-
 	data->configured = 1;
 
 	return 0;
@@ -191,55 +186,70 @@ static int spi_stm32_transceive(struct spi_config *config,
 		}
 	}
 
-	/* not supported yet */
-	if (tx_count > 1 || rx_count > 1) {
-		return -EINVAL;
-	}
-
-	__ASSERT(!(rx.buf_len && (rx.buf == NULL)),
+	__ASSERT(!(rx_bufs.len && (rx_bufs.buf == NULL)),
 		 "spi_stm32_transceive: ERROR - rx NULL buffer");
 
-	__ASSERT(!(tx.buf_len && (tx.buf == NULL)),
+	__ASSERT(!(tx_bufs.len && (tx_bufs.buf == NULL)),
 		 "spi_stm32_transceive: ERROR - tx NULL buffer");
-
-
-	data->rx.process = spi_stm32_receive;
-	data->rx.len = rx_bufs->len;
-	data->rx.buf = rx_bufs->buf;
-
-	data->tx.process = spi_stm32_transmit;
-	data->tx.len = tx_bufs->len;
-	data->tx.buf = tx_bufs->buf;
 
 	LL_SPI_Enable(spi);
 
+	while (tx_count || rx_count) {
+
+		data->rx.process = spi_stm32_receive;
+		data->rx.buf = NULL;
+		data->rx.len = 0;
+		if (rx_count && rx_bufs) {
+			data->rx.len = rx_bufs->len;
+			data->rx.buf = rx_bufs->buf;
+		}
+
+		data->tx.process = spi_stm32_transmit;
+		data->tx.buf = NULL;
+		data->tx.len = 0;
+		if (tx_count && tx_bufs) {
+			data->tx.len = tx_bufs->len;
+			data->tx.buf = tx_bufs->buf;
+		}
+
 #ifdef CONFIG_SPI_STM32_INTERRUPT
-	if (data->rx.len) {
-		LL_SPI_EnableIT_RXNE(spi);
-	}
+		if (data->rx.len) {
+			LL_SPI_EnableIT_RXNE(spi);
+		}
 
-	if (data->tx.len) {
-		LL_SPI_EnableIT_TXE(spi);
-	}
+		if (data->tx.len) {
+			LL_SPI_EnableIT_TXE(spi);
+		}
 
-	k_sem_take(&data->sync, K_FOREVER);
+		k_sem_take(&data->sync, K_FOREVER);
 #else
-	do {
-		if (LL_SPI_IsActiveFlag_TXE(spi)) {
-			data->tx.process(spi, &data->tx);
-		}
+		while (data->tx.len || data->rx.len) {
+			if (LL_SPI_IsActiveFlag_TXE(spi)) {
+				data->tx.process(spi, &data->tx);
+			}
 
-		if (LL_SPI_IsActiveFlag_RXNE(spi) && data->rx.len) {
-			data->rx.process(spi, &data->rx);
+			if (LL_SPI_IsActiveFlag_RXNE(spi) && data->rx.len) {
+				data->rx.process(spi, &data->rx);
+			}
 		}
-	} while (data->tx.len || data->rx.len);
 #endif
 
 #if defined(CONFIG_SOC_SERIES_STM32L4X) || defined(CONFIG_SOC_SERIES_STM32F3X)
-	while (LL_SPI_GetTxFIFOLevel(spi) != LL_SPI_TX_FIFO_EMPTY) {
-		(void) LL_SPI_ReceiveData8(spi);
-	}
+		while (LL_SPI_GetTxFIFOLevel(spi) != LL_SPI_TX_FIFO_EMPTY) {
+			(void) LL_SPI_ReceiveData8(spi);
+		}
 #endif
+		if (rx_count) {
+			rx_bufs++;
+			rx_count--;
+		}
+
+		if (tx_count) {
+			tx_bufs++;
+			tx_count--;
+		}
+	}
+
 	if (LL_SPI_GetMode(spi) == LL_SPI_MODE_MASTER) {
 		while (LL_SPI_IsActiveFlag_BSY(spi)) {
 			/* NOP */
