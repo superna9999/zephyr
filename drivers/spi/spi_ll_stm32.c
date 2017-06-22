@@ -133,10 +133,14 @@ static int spi_stm32_configure(struct spi_config *config)
 		LL_SPI_SetMode(spi, LL_SPI_MODE_MASTER);
 	}
 
-	if (config->operation & SPI_OP_MODE_SLAVE) {
-		LL_SPI_SetNSSMode(spi, LL_SPI_NSS_HARD_OUTPUT);
-	} else {
+	if (config->vendor & STM32_SPI_NSS_IGNORE) {
 		LL_SPI_SetNSSMode(spi, LL_SPI_NSS_SOFT);
+	} else {
+		if (config->operation & SPI_OP_MODE_SLAVE) {
+			LL_SPI_SetNSSMode(spi, LL_SPI_NSS_HARD_OUTPUT);
+		} else {
+			LL_SPI_SetNSSMode(spi, LL_SPI_NSS_SOFT);
+		}
 	}
 
 	LL_SPI_SetDataWidth(spi, LL_SPI_DATAWIDTH_8BIT);
@@ -378,8 +382,8 @@ static const struct spi_stm32_config spi_stm32_cfg_2 = {
 };
 
 static struct spi_stm32_data spi_stm32_dev_data_2 = {
-	SPI_CONTEXT_INIT_LOCK(spi_stm32_dev_data_3, ctx),
-	SPI_CONTEXT_INIT_SYNC(spi_stm32_dev_data_3, ctx),
+	SPI_CONTEXT_INIT_LOCK(spi_stm32_dev_data_2, ctx),
+	SPI_CONTEXT_INIT_SYNC(spi_stm32_dev_data_2, ctx),
 };;
 
 DEVICE_AND_API_INIT(spi_stm32_2, CONFIG_SPI_2_NAME, &spi_stm32_init,
