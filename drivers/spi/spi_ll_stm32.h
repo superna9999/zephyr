@@ -33,6 +33,7 @@ struct spi_stm32_buffer_tx {
 	tx_func_t process;
 	unsigned int len;
 	const u8_t *buf;
+	bool is_last;
 };
 
 struct spi_stm32_data {

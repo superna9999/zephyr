@@ -33,17 +33,30 @@ static void spi_stm32_isr(void *arg)
 	struct spi_stm32_data *data = dev->driver_data;
 	SPI_TypeDef *spi = cfg->spi;
 
-	if (LL_SPI_IsActiveFlag_TXE(spi)) {
-		data->tx.process(spi, &data->tx);
+	if (LL_SPI_IsActiveFlag_TXE(spi)){
+		if (data->tx.len ||
+		    (!data->tx.len && data->tx.is_last && data->rx.len)) {
+			data->tx.process(spi, &data->tx);
+		} else {
+			LL_SPI_DisableIT_TXE(spi);
+		}
 	}
 
 	if (LL_SPI_IsActiveFlag_RXNE(spi)) {
-		data->rx.process(spi, &data->rx);
+		if (data->rx.len) {
+			data->rx.process(spi, &data->rx);
+		} else {
+			LL_SPI_DisableIT_RXNE(spi);
+		}
+	}
+	
+	if (!(data->tx.len && data->rx.len)) {
+		LL_SPI_DisableIT_TXE(spi);
+		LL_SPI_DisableIT_RXNE(spi);
 	}
 
-	if (!data->rx.len && !data->tx.len) {
-		LL_SPI_DisableIT_RXNE(spi);
-		LL_SPI_DisableIT_TXE(spi);
+	if (!LL_SPI_IsEnabledIT_RXNE(spi) &&
+	    !LL_SPI_IsEnabledIT_TXE(spi)) {
 		k_sem_give(&data->sync);
 	}
 }
@@ -117,12 +130,10 @@ static int spi_stm32_configure(struct spi_config *config)
 		LL_SPI_SetMode(spi, LL_SPI_MODE_MASTER);
 	}
 
-	if (config->vendor & STM32_SPI_NSS_IGNORE) {
-		LL_SPI_SetNSSMode(spi, LL_SPI_NSS_SOFT);
-	} else if (config->operation & SPI_OP_MODE_SLAVE) {
+	if (config->operation & SPI_OP_MODE_SLAVE) {
 		LL_SPI_SetNSSMode(spi, LL_SPI_NSS_HARD_OUTPUT);
 	} else {
-		LL_SPI_SetNSSMode(spi, LL_SPI_NSS_HARD_INPUT);
+		LL_SPI_SetNSSMode(spi, LL_SPI_NSS_SOFT);
 	}
 
 	LL_SPI_SetDataWidth(spi, LL_SPI_DATAWIDTH_8BIT);
@@ -139,26 +150,31 @@ static int spi_stm32_configure(struct spi_config *config)
 
 static void spi_stm32_transmit(SPI_TypeDef *spi, struct spi_stm32_buffer_tx *p)
 {
-	if (!p->len) {
-		return;
+	if (p->len && p->buf) {
+		LL_SPI_TransmitData8(spi, *p->buf);
+		p->buf++;
+	} else {
+		/* Transmit NOP byte */
+		LL_SPI_TransmitData8(spi, 0xff);
 	}
 
-	LL_SPI_TransmitData8(spi, *p->buf);
-
-	p->buf++;
-	p->len--;
+	if (p->len) {
+		p->len--;
+	}
 }
 
 static void spi_stm32_receive(SPI_TypeDef *spi, struct spi_stm32_buffer_rx *p)
 {
-	if (!p->len) {
-		return;
+	if (p->len && p->buf) {
+		*p->buf = LL_SPI_ReceiveData8(spi);
+		p->buf++;
+	} else {
+		LL_SPI_ReceiveData8(spi);
 	}
 
-	*p->buf = LL_SPI_ReceiveData8(spi);
-
-	p->buf++;
-	p->len--;
+	if (p->len) {
+		p->len--;
+	}
 }
 
 static int spi_stm32_release(struct spi_config *config)
@@ -170,14 +186,21 @@ static int spi_stm32_release(struct spi_config *config)
 	return 0;
 }
 
-static int spi_stm32_transceive(struct spi_config *config,
-				const struct spi_buf *tx_bufs, u32_t tx_count,
-				struct spi_buf *rx_bufs, u32_t rx_count)
+static int transceive(struct spi_config *config,
+		      const struct spi_buf *tx_bufs, u32_t tx_count,
+		      struct spi_buf *rx_bufs, u32_t rx_count,
+		      bool asynchronous, struct k_poll_signal *signal)
 {
 	const struct spi_stm32_config *cfg = CONFIG_CFG(config);
 	struct spi_stm32_data *data = CONFIG_DATA(config);
 	SPI_TypeDef *spi = cfg->spi;
 	int ret;
+
+	if (asynchronous)
+		return -ENOTSUP;
+
+	if (!tx_count && !rx_count)
+		return 0;
 
 	if (!data->configured) {
 		ret = spi_stm32_configure(config);
@@ -185,70 +208,93 @@ static int spi_stm32_transceive(struct spi_config *config,
 			return ret;
 		}
 	}
+	
+	/* Initial RX Setup */
+	data->rx.process = spi_stm32_receive;
+	data->rx.len = 0;
+	data->rx.buf = NULL;
 
-	__ASSERT(!(rx_bufs.len && (rx_bufs.buf == NULL)),
-		 "spi_stm32_transceive: ERROR - rx NULL buffer");
-
-	__ASSERT(!(tx_bufs.len && (tx_bufs.buf == NULL)),
-		 "spi_stm32_transceive: ERROR - tx NULL buffer");
+	/* Initial TX Setup */
+	data->tx.process = spi_stm32_transmit;
+	data->tx.len = 0;
+	data->tx.buf = NULL;
 
 	LL_SPI_Enable(spi);
 
-	while (tx_count || rx_count) {
+#if defined(CONFIG_SOC_SERIES_STM32L4X) || defined(CONFIG_SOC_SERIES_STM32F3X)
+	/* Flush RX buffer */
+	while (LL_SPI_IsActiveFlag_RXNE(spi)) {
+		(void) LL_SPI_ReceiveData8(spi);
+	}
+#endif
 
-		data->rx.process = spi_stm32_receive;
-		data->rx.buf = NULL;
-		data->rx.len = 0;
-		if (rx_count && rx_bufs) {
-			data->rx.len = rx_bufs->len;
-			data->rx.buf = rx_bufs->buf;
+	while (1) {
+		if (!data->tx.len) {
+			if (tx_count) {
+				data->tx.len = tx_bufs->len;
+				data->tx.buf = tx_bufs->buf;
+				tx_count--;
+				tx_bufs++;
+			} else {
+				data->tx.len = 0;
+				data->tx.buf = NULL;
+			}
+		}
+		data->tx.is_last = !tx_count;
+
+		if (!data->rx.len) {
+			if (rx_count) {
+				data->rx.len = rx_bufs->len;
+				data->rx.buf = rx_bufs->buf;
+				rx_count--;
+				rx_bufs++;
+			} else {
+				data->rx.len = 0;
+				data->rx.buf = NULL;
+			}
 		}
 
-		data->tx.process = spi_stm32_transmit;
-		data->tx.buf = NULL;
-		data->tx.len = 0;
-		if (tx_count && tx_bufs) {
-			data->tx.len = tx_bufs->len;
-			data->tx.buf = tx_bufs->buf;
-		}
+		if (!data->rx.len &&
+		    !data->tx.len &&
+		    !rx_count &&
+		    !tx_count)
+			break;
 
 #ifdef CONFIG_SPI_STM32_INTERRUPT
 		if (data->rx.len) {
 			LL_SPI_EnableIT_RXNE(spi);
 		}
 
-		if (data->tx.len) {
+		/* Keep transmitting NOP data until data needs to be RX */
+		if (data->tx.len ||
+		    (!data->tx.len && data->tx.is_last && data->rx.len)) {
 			LL_SPI_EnableIT_TXE(spi);
 		}
 
 		k_sem_take(&data->sync, K_FOREVER);
 #else
-		while (data->tx.len || data->rx.len) {
-			if (LL_SPI_IsActiveFlag_TXE(spi)) {
+		do {
+			/* Keep transmitting NOP data until RX data left */
+			if (LL_SPI_IsActiveFlag_TXE(spi) &&
+			    (data->tx.len ||
+			     (!data->tx.len && data->tx.is_last &&
+			      data->rx.len))) {
 				data->tx.process(spi, &data->tx);
 			}
 
 			if (LL_SPI_IsActiveFlag_RXNE(spi) && data->rx.len) {
 				data->rx.process(spi, &data->rx);
 			}
-		}
+		} while (data->tx.len && data->rx.len);
 #endif
+	}
 
 #if defined(CONFIG_SOC_SERIES_STM32L4X) || defined(CONFIG_SOC_SERIES_STM32F3X)
-		while (LL_SPI_GetTxFIFOLevel(spi) != LL_SPI_TX_FIFO_EMPTY) {
-			(void) LL_SPI_ReceiveData8(spi);
-		}
-#endif
-		if (rx_count) {
-			rx_bufs++;
-			rx_count--;
-		}
-
-		if (tx_count) {
-			tx_bufs++;
-			tx_count--;
-		}
+	/* Flush RX buffer */
+	while (LL_SPI_IsActiveFlag_RXNE(spi)) {
+		(void) LL_SPI_ReceiveData8(spi);
 	}
+#endif
 
 	if (LL_SPI_GetMode(spi) == LL_SPI_MODE_MASTER) {
 		while (LL_SPI_IsActiveFlag_BSY(spi)) {
@@ -260,8 +306,32 @@ static int spi_stm32_transceive(struct spi_config *config,
 	return 0;
 }
 
+static int spi_stm32_transceive(struct spi_config *config,
+				const struct spi_buf *tx_bufs, u32_t tx_count,
+				struct spi_buf *rx_bufs, u32_t rx_count)
+{
+	return transceive(config, tx_bufs, tx_count,
+			  rx_bufs, rx_count, false, NULL);
+}
+
+#ifdef CONFIG_POLL
+static int spi_stm32_transceive_async(struct spi_config *config,
+				      const struct spi_buf *tx_bufs,
+				      size_t tx_count,
+				      struct spi_buf *rx_bufs,
+				      size_t rx_count,
+				      struct k_poll_signal *async)
+{
+	return transceive(config, tx_bufs, tx_count,
+			  rx_bufs, rx_count, true, async);
+}
+#endif /* CONFIG_POLL */
+
 static const struct spi_driver_api api_funcs = {
 	.transceive = spi_stm32_transceive,
+#ifdef CONFIG_POLL
+	.transceive_async = spi_stm32_transceive_async,
+#endif
 	.release = spi_stm32_release,
 };
 
