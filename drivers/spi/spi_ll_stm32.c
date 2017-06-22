@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define SYS_LOG_LEVEL CONFIG_SYS_LOG_SPI_LEVEL
+#include <logging/sys_log.h>
+
 #include <misc/util.h>
 #include <kernel.h>
 #include <board.h>
@@ -16,9 +19,6 @@
 #include <drivers/spi/spi_ll_stm32.h>
 #include <spi_ll_stm32.h>
 
-#define SYS_LOG_LEVEL CONFIG_SYS_LOG_SPI_LEVEL
-#include <logging/sys_log.h>
-
 #define CONFIG_CFG(cfg)						\
 ((const struct spi_stm32_config * const )(cfg)->dev->config->config_info)
 
@@ -26,6 +26,9 @@
 ((struct spi_stm32_data * const)(cfg)->dev->driver_data)
 
 #ifdef CONFIG_SPI_STM32_INTERRUPT
+static void spi_stm32_transmit(SPI_TypeDef *spi, struct spi_stm32_data *data);
+static void spi_stm32_receive(SPI_TypeDef *spi, struct spi_stm32_data *data);
+
 static void spi_stm32_isr(void *arg)
 {
 	struct device * const dev = (struct device *) arg;
@@ -33,31 +36,26 @@ static void spi_stm32_isr(void *arg)
 	struct spi_stm32_data *data = dev->driver_data;
 	SPI_TypeDef *spi = cfg->spi;
 
-	if (LL_SPI_IsActiveFlag_TXE(spi)){
-		if (data->tx.len ||
-		    (!data->tx.len && data->tx.is_last && data->rx.len)) {
-			data->tx.process(spi, &data->tx);
-		} else {
-			LL_SPI_DisableIT_TXE(spi);
-		}
+	if (LL_SPI_IsActiveFlag_TXE(spi) && spi_context_tx_on(&data->ctx)) {
+		spi_stm32_transmit(spi, data);
 	}
 
 	if (LL_SPI_IsActiveFlag_RXNE(spi)) {
-		if (data->rx.len) {
-			data->rx.process(spi, &data->rx);
+		if (spi_context_rx_on(&data->ctx)) {
+			spi_stm32_receive(spi, data);
 		} else {
 			LL_SPI_DisableIT_RXNE(spi);
 		}
 	}
-	
-	if (!(data->tx.len && data->rx.len)) {
+
+	if (!spi_context_tx_on(&data->ctx) &&
+	    !spi_context_rx_on(&data->ctx)) {
 		LL_SPI_DisableIT_TXE(spi);
 		LL_SPI_DisableIT_RXNE(spi);
-	}
 
-	if (!LL_SPI_IsEnabledIT_RXNE(spi) &&
-	    !LL_SPI_IsEnabledIT_TXE(spi)) {
-		k_sem_give(&data->sync);
+		spi_context_cs_control(&data->ctx, false);
+
+		spi_context_complete(&data->ctx, 0);
 	}
 }
 #endif
@@ -79,6 +77,11 @@ static int spi_stm32_configure(struct spi_config *config)
 	SPI_TypeDef *spi = cfg->spi;
 	u32_t clock;
 	int br;
+
+	if (spi_context_configured(&data->ctx, config)) {
+		/* Nothing to do */
+		return 0;
+	}
 
 	if (SPI_WORD_SIZE_GET(config->operation) != 8) {
 		return -ENOTSUP;
@@ -143,45 +146,45 @@ static int spi_stm32_configure(struct spi_config *config)
 #endif
 	LL_SPI_SetStandard(spi, LL_SPI_PROTOCOL_MOTOROLA);
 
-	data->configured = 1;
+	/* At this point, it's mandatory to set this on the context! */
+	data->ctx.config = config;
+
+	spi_context_cs_configure(&data->ctx);
 
 	return 0;
 }
 
-static void spi_stm32_transmit(SPI_TypeDef *spi, struct spi_stm32_buffer_tx *p)
+static void spi_stm32_transmit(SPI_TypeDef *spi, struct spi_stm32_data *data)
 {
-	if (p->len && p->buf) {
-		LL_SPI_TransmitData8(spi, *p->buf);
-		p->buf++;
+	if (spi_context_tx_on(&data->ctx)) {
+		LL_SPI_TransmitData8(spi, UNALIGNED_GET((u8_t *)
+						        (data->ctx.tx_buf)));
 	} else {
 		/* Transmit NOP byte */
-		LL_SPI_TransmitData8(spi, 0xff);
+		LL_SPI_TransmitData8(spi, 0);
 	}
-
-	if (p->len) {
-		p->len--;
-	}
+	
+	spi_context_update_tx(&data->ctx, 1);
 }
 
-static void spi_stm32_receive(SPI_TypeDef *spi, struct spi_stm32_buffer_rx *p)
+static void spi_stm32_receive(SPI_TypeDef *spi, struct spi_stm32_data *data)
 {
-	if (p->len && p->buf) {
-		*p->buf = LL_SPI_ReceiveData8(spi);
-		p->buf++;
+	if (spi_context_rx_on(&data->ctx)) {
+		u8_t byte = LL_SPI_ReceiveData8(spi);
+
+		UNALIGNED_PUT(byte, (u8_t *)data->ctx.rx_buf);
 	} else {
 		LL_SPI_ReceiveData8(spi);
 	}
 
-	if (p->len) {
-		p->len--;
-	}
+	spi_context_update_rx(&data->ctx, 1);
 }
 
 static int spi_stm32_release(struct spi_config *config)
 {
 	struct spi_stm32_data *data = CONFIG_DATA(config);
 
-	data->configured = 0;
+	spi_context_unlock_unconditionally(&data->ctx);
 
 	return 0;
 }
@@ -196,29 +199,25 @@ static int transceive(struct spi_config *config,
 	SPI_TypeDef *spi = cfg->spi;
 	int ret;
 
-	if (asynchronous)
-		return -ENOTSUP;
-
 	if (!tx_count && !rx_count)
 		return 0;
 
-	if (!data->configured) {
-		ret = spi_stm32_configure(config);
-		if (ret) {
-			return ret;
-		}
+#ifndef CONFIG_SPI_STM32_INTERRUPT
+	if (asynchronous)
+		return -ENOTSUP;
+#endif
+
+	spi_context_lock(&data->ctx, asynchronous, signal);
+
+	ret = spi_stm32_configure(config);
+	if (ret) {
+		return ret;
 	}
+
+	/* Set buffers info */
+	spi_context_buffers_setup(&data->ctx, tx_bufs, tx_count,
+				  rx_bufs, rx_count, 1);
 	
-	/* Initial RX Setup */
-	data->rx.process = spi_stm32_receive;
-	data->rx.len = 0;
-	data->rx.buf = NULL;
-
-	/* Initial TX Setup */
-	data->tx.process = spi_stm32_transmit;
-	data->tx.len = 0;
-	data->tx.buf = NULL;
-
 	LL_SPI_Enable(spi);
 
 #if defined(CONFIG_SOC_SERIES_STM32L4X) || defined(CONFIG_SOC_SERIES_STM32F3X)
@@ -227,67 +226,33 @@ static int transceive(struct spi_config *config,
 		(void) LL_SPI_ReceiveData8(spi);
 	}
 #endif
-
-	while (1) {
-		if (!data->tx.len) {
-			if (tx_count) {
-				data->tx.len = tx_bufs->len;
-				data->tx.buf = tx_bufs->buf;
-				tx_count--;
-				tx_bufs++;
-			} else {
-				data->tx.len = 0;
-				data->tx.buf = NULL;
-			}
-		}
-		data->tx.is_last = !tx_count;
-
-		if (!data->rx.len) {
-			if (rx_count) {
-				data->rx.len = rx_bufs->len;
-				data->rx.buf = rx_bufs->buf;
-				rx_count--;
-				rx_bufs++;
-			} else {
-				data->rx.len = 0;
-				data->rx.buf = NULL;
-			}
-		}
-
-		if (!data->rx.len &&
-		    !data->tx.len &&
-		    !rx_count &&
-		    !tx_count)
-			break;
+	spi_context_cs_control(&data->ctx, true);
 
 #ifdef CONFIG_SPI_STM32_INTERRUPT
-		if (data->rx.len) {
-			LL_SPI_EnableIT_RXNE(spi);
-		}
+	if (rx_bufs)
+		LL_SPI_EnableIT_RXNE(spi);
 
-		/* Keep transmitting NOP data until data needs to be RX */
-		if (data->tx.len ||
-		    (!data->tx.len && data->tx.is_last && data->rx.len)) {
-			LL_SPI_EnableIT_TXE(spi);
-		}
+	LL_SPI_EnableIT_TXE(spi);
 
-		k_sem_take(&data->sync, K_FOREVER);
+	spi_context_wait_for_completion(&data->ctx);
 #else
-		do {
-			/* Keep transmitting NOP data until RX data left */
-			if (LL_SPI_IsActiveFlag_TXE(spi) &&
-			    (data->tx.len ||
-			     (!data->tx.len && data->tx.is_last &&
-			      data->rx.len))) {
-				data->tx.process(spi, &data->tx);
-			}
+	do {
+		/* Keep transmitting NOP data until RX data left */
+		if ((spi_context_tx_on(&data->ctx) ||
+		     spi_context_rx_on(&data->ctx)) &&
+		    LL_SPI_IsActiveFlag_TXE(spi)) {
+			spi_stm32_transmit(spi, data);
+		}
 
-			if (LL_SPI_IsActiveFlag_RXNE(spi) && data->rx.len) {
-				data->rx.process(spi, &data->rx);
-			}
-		} while (data->tx.len && data->rx.len);
+		if (spi_context_rx_on(&data->ctx) &&
+		    LL_SPI_IsActiveFlag_RXNE(spi)) {
+			spi_stm32_receive(spi, data);
+		}
+	} while (spi_context_tx_on(&data->ctx) ||
+		 spi_context_rx_on(&data->ctx));
+
+	spi_context_complete(&data->ctx, 0);
 #endif
-	}
 
 #if defined(CONFIG_SOC_SERIES_STM32L4X) || defined(CONFIG_SOC_SERIES_STM32F3X)
 	/* Flush RX buffer */
@@ -302,6 +267,8 @@ static int transceive(struct spi_config *config,
 		}
 		LL_SPI_Disable(spi);
 	}
+
+	spi_context_release(&data->ctx, ret);
 
 	return 0;
 }
@@ -347,10 +314,10 @@ static int spi_stm32_init(struct device *dev)
 			       (clock_control_subsys_t) &cfg->pclken);
 
 #ifdef CONFIG_SPI_STM32_INTERRUPT
-	k_sem_init(&data->sync, 0, UINT_MAX);
-
 	cfg->irq_config(dev);
 #endif
+
+	spi_context_release(&data->ctx, 0);
 
 	return 0;
 }
@@ -372,7 +339,10 @@ static const struct spi_stm32_config spi_stm32_cfg_1 = {
 #endif
 };
 
-static struct spi_stm32_data spi_stm32_dev_data_1;
+static struct spi_stm32_data spi_stm32_dev_data_1 = {
+	SPI_CONTEXT_INIT_LOCK(spi_stm32_dev_data_1, ctx),
+	SPI_CONTEXT_INIT_SYNC(spi_stm32_dev_data_1, ctx),
+};
 
 DEVICE_AND_API_INIT(spi_stm32_1, CONFIG_SPI_1_NAME, &spi_stm32_init,
 		    &spi_stm32_dev_data_1, &spi_stm32_cfg_1,
@@ -407,7 +377,10 @@ static const struct spi_stm32_config spi_stm32_cfg_2 = {
 #endif
 };
 
-static struct spi_stm32_data spi_stm32_dev_data_2;
+static struct spi_stm32_data spi_stm32_dev_data_2 = {
+	SPI_CONTEXT_INIT_LOCK(spi_stm32_dev_data_3, ctx),
+	SPI_CONTEXT_INIT_SYNC(spi_stm32_dev_data_3, ctx),
+};;
 
 DEVICE_AND_API_INIT(spi_stm32_2, CONFIG_SPI_2_NAME, &spi_stm32_init,
 		    &spi_stm32_dev_data_2, &spi_stm32_cfg_2,
@@ -442,7 +415,10 @@ static const  struct spi_stm32_config spi_stm32_cfg_3 = {
 #endif
 };
 
-static struct spi_stm32_data spi_stm32_dev_data_3;
+static struct spi_stm32_data spi_stm32_dev_data_3 = {
+	SPI_CONTEXT_INIT_LOCK(spi_stm32_dev_data_3, ctx),
+	SPI_CONTEXT_INIT_SYNC(spi_stm32_dev_data_3, ctx),
+};;
 
 DEVICE_AND_API_INIT(spi_stm32_3, CONFIG_SPI_3_NAME, &spi_stm32_init,
 		    &spi_stm32_dev_data_3, &spi_stm32_cfg_3,

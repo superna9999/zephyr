@@ -7,6 +7,8 @@
 #ifndef _STM32_SPI_H_
 #define _STM32_SPI_H_
 
+#include "spi_context.h"
+
 typedef void (*irq_config_func_t)(struct device *port);
 
 struct spi_stm32_config {
@@ -37,12 +39,7 @@ struct spi_stm32_buffer_tx {
 };
 
 struct spi_stm32_data {
-	struct spi_stm32_buffer_tx tx;
-	struct spi_stm32_buffer_rx rx;
-#ifdef CONFIG_SPI_STM32_INTERRUPT
-	struct k_sem sync;
-#endif
-	int configured;
+	struct spi_context ctx;
 };
 
 #endif	/* _STM32_SPI_H_ */
