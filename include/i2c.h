@@ -110,17 +110,58 @@ union __deprecated dev_config {
  * These are for internal use only, so skip these in
  * public documentation.
  */
+#ifdef CONFIG_I2C_SLAVE
+typedef int (*i2c_slave_write_request_t)(void * priv);
+typedef int (*i2c_slave_read_request_t)(void * priv, u8_t *val);
+typedef int (*i2c_slave_write_done_t)(void * priv, u8_t val);
+typedef int (*i2c_slave_read_done_t)(void * priv);
+typedef int (*i2c_slave_stop_t)(void * priv);
+
+struct i2c_slave_api {
+	i2c_slave_write_request_t write_request;
+	i2c_slave_read_request_t read_request;
+	i2c_slave_write_done_t write_done;
+	i2c_slave_read_done_t read_done;
+	i2c_slave_stop_t stop;
+};
+#endif
+
 typedef int (*i2c_api_configure_t)(struct device *dev,
 				   u32_t dev_config);
 typedef int (*i2c_api_full_io_t)(struct device *dev,
 				 struct i2c_msg *msgs,
 				 u8_t num_msgs,
 				 u16_t addr);
+#ifdef CONFIG_I2C_SLAVE
+typedef bool (*i2c_api_slave_is_supported_t)(struct device *dev);
+typedef int (*i2c_api_slave_attach_t)(struct device *dev, u8_t address,
+				      const struct i2c_slave_api *funcs,
+				      void *priv);
+typedef int (*i2c_api_slave_detach_t)(struct device *dev, u8_t address,
+				      void *priv);
+#endif
 
 struct i2c_driver_api {
 	i2c_api_configure_t configure;
 	i2c_api_full_io_t transfer;
+#ifdef CONFIG_I2C_SLAVE
+	i2c_api_slave_is_supported_t slave_is_supported;
+	i2c_api_slave_attach_t slave_attach;
+	i2c_api_slave_detach_t slave_detach;
+#endif
 };
+
+#ifdef CONFIG_I2C_SLAVE
+typedef int (*i2c_slave_api_attach_t)(struct device *dev);
+typedef int (*i2c_slave_api_detach_t)(struct device *dev);
+typedef const void *(*i2c_slave_api_get_funcs_t)(struct device *dev);
+
+struct i2c_slave_driver_api {
+	i2c_slave_api_attach_t attach;
+	i2c_slave_api_detach_t detach;
+	i2c_slave_api_get_funcs_t get_funcs;
+};
+#endif
 /**
  * @endcond
  */
@@ -174,6 +215,146 @@ static inline int _impl_i2c_transfer(struct device *dev,
 
 	return api->transfer(dev, msgs, num_msgs, addr);
 }
+
+#ifdef CONFIG_I2C_SLAVE
+/**
+ * @brief Returns if the current I2C Controller support Slave Mode
+ *
+ * This routine returns if the current I2C Controller support Slave Mode.
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ *
+ * @retval false If not supported
+ * @retval true If supported
+ */
+__syscall bool i2c_slave_is_supported(struct device *dev);
+
+static inline bool _impl_i2c_slave_is_supported(struct device *dev)
+{
+	const struct i2c_driver_api *api = dev->driver_api;
+
+	if (!api->slave_is_supported)
+		return false;
+
+	return api->slave_is_supported(dev);
+}
+
+/**
+ * @brief Attaches the provided funcs and address as Slave device
+ *
+ * This routine starts the I2C Controller in Slave mode and uses
+ * the provided funcs, address and priv to send events to the
+ * Slave driver implementation.
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ * @param address Address of the I2C Slave to match on the bus
+ * @param funcs The Slave API funcs used by the controller to send bus events
+ * @param priv Private data passed along the bus events
+ *
+ * @retval 0 Is successful
+ * @retval -EINVAL If parameters are invalid
+ * @retval -EIO General input / output error.
+ */
+__syscall int i2c_slave_attach(struct device *dev, u8_t address,
+			       const struct i2c_slave_api *funcs,
+			       void *priv);
+
+static inline int _impl_i2c_slave_attach(struct device *dev, u8_t address,
+					 const struct i2c_slave_api *funcs,
+					 void *priv)
+{
+	const struct i2c_driver_api *api = dev->driver_api;
+
+	return api->slave_attach(dev, address, funcs, priv);
+}
+
+/**
+ * @brief Detaches the current Slave funcs and address
+ *
+ * This routine stops the I2C Controller acting in Slave mode.
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ * @param address Address of the I2C Slave to match on the bus
+ * @param priv Private data passed along the bus events
+ *
+ * @retval 0 Is successful
+ * @retval -EINVAL If parameters are invalid
+ */
+__syscall int i2c_slave_detach(struct device *dev, u8_t address,
+			       void *priv);
+
+static inline int _impl_i2c_slave_detach(struct device *dev, u8_t address,
+					  void *priv)
+{
+	const struct i2c_driver_api *api = dev->driver_api;
+
+	return api->slave_detach(dev, address, priv);
+}
+
+/**
+ * @brief Intructs the I2C Slave device to attach itself to the I2C Controller
+ *
+ * This routine instructs the I2C Slave device to attach itself to the I2C
+ * Controller.
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ *
+ * @retval 0 Is successful
+ * @retval -EINVAL If parameters are invalid
+ * @retval -EIO General input / output error.
+ */
+__syscall int i2c_slave_driver_attach(struct device *dev);
+
+static inline int _impl_i2c_slave_driver_attach(struct device *dev)
+{
+	const struct i2c_slave_driver_api *api = dev->driver_api;
+
+	return api->attach(dev);
+}
+
+/**
+ * @brief Intructs the I2C Slave device to detach itself from the I2C Controller
+ *
+ * This routine instructs the I2C Slave device to detach itself from the I2C
+ * Controller.
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ *
+ * @retval 0 Is successful
+ * @retval -EINVAL If parameters are invalid
+ */
+__syscall int i2c_slave_driver_detach(struct device *dev);
+
+static inline int _impl_i2c_slave_driver_detach(struct device *dev)
+{
+	const struct i2c_slave_driver_api *api = dev->driver_api;
+
+	return api->detach(dev);
+}
+
+
+/**
+ * @brief Get the I2C Slave device specific funcs
+ *
+ * This routine returns the I2C Slave device specific funcs,
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ *
+ * @retval valid pointer If successful
+ * @retval NULL If not available
+ */
+__syscall const void *i2c_slave_driver_get_funcs(struct device *dev);
+
+static inline const void *_impl_i2c_slave_driver_get_funcs(struct device *dev)
+{
+	const struct i2c_slave_driver_api *api = dev->driver_api;
+
+	if (!api->get_funcs)
+		return NULL;
+
+	return api->get_funcs(dev);
+}
+#endif
 
 /*
  * Derived i2c APIs -- all implemented in terms of i2c_transfer()
