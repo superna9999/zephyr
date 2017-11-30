@@ -1,0 +1,1 @@
+zephyr_sources_ifdef(CONFIG_I2C_SLAVE_EEPROM	eeprom_slave.c)
