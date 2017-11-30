@@ -15,6 +15,7 @@
 #include <board.h>
 #include <errno.h>
 #include <i2c.h>
+#include "i2c-priv.h"
 #include "i2c_ll_stm32.h"
 
 #define SYS_LOG_LEVEL CONFIG_SYS_LOG_I2C_LEVEL
@@ -60,6 +61,70 @@ void stm32_i2c_event_isr(void *arg)
 	const struct i2c_stm32_config *cfg = DEV_CFG((struct device *)arg);
 	struct i2c_stm32_data *data = DEV_DATA((struct device *)arg);
 	I2C_TypeDef *i2c = cfg->i2c;
+
+#if defined(CONFIG_I2C_SLAVE)
+	if (data->slave_attached) {
+		if (LL_I2C_IsActiveFlag_ADDR(i2c)) {
+			u32_t dir;
+
+			LL_I2C_ClearFlag_ADDR(i2c);
+
+			dir = LL_I2C_GetTransferDirection(i2c);
+			if (dir == LL_I2C_DIRECTION_WRITE) {
+				data->slave_funcs->write_request(
+							data->slave_priv);
+				LL_I2C_EnableIT_RX(i2c);
+			} else {
+				u8_t val;
+				data->slave_funcs->read_request(
+							data->slave_priv, &val);
+				LL_I2C_TransmitData8(i2c, val);
+				LL_I2C_EnableIT_TX(i2c);
+				LL_I2C_EnableIT_NACK(i2c);
+			}
+
+			LL_I2C_EnableIT_STOP(i2c);
+			LL_I2C_EnableIT_ERR(i2c);
+		} else if (LL_I2C_IsActiveFlag_NACK(i2c) ||
+			   LL_I2C_IsActiveFlag_STOP(i2c)) {
+			if (LL_I2C_IsActiveFlag_NACK(i2c)) {
+				LL_I2C_ClearFlag_NACK(i2c);
+			}
+
+			if (LL_I2C_IsActiveFlag_STOP(i2c)) {
+				LL_I2C_ClearFlag_STOP(i2c);
+			}
+
+			data->slave_funcs->stop(data->slave_priv);
+			
+			LL_I2C_DisableIT_NACK(i2c);
+			LL_I2C_DisableIT_TX(i2c);
+			LL_I2C_DisableIT_RX(i2c);
+			LL_I2C_DisableIT_STOP(i2c);
+			LL_I2C_DisableIT_ERR(i2c);
+			
+			LL_I2C_AcknowledgeNextData(i2c, LL_I2C_ACK);
+
+			/* Flush remaining TX byte */
+			LL_I2C_Disable(i2c);
+			LL_I2C_Enable(i2c);
+		} else if (LL_I2C_IsActiveFlag_TXIS(i2c)) {
+			u8_t val;
+			
+			data->slave_funcs->read_done(data->slave_priv);
+			data->slave_funcs->read_request(data->slave_priv, &val);
+			LL_I2C_TransmitData8(i2c, val);
+		} else if (LL_I2C_IsActiveFlag_RXNE(i2c)) {
+			u8_t val = LL_I2C_ReceiveData8(i2c);
+			
+			if (data->slave_funcs->write_done(data->slave_priv,
+							  val))
+				LL_I2C_AcknowledgeNextData(i2c, LL_I2C_NACK);
+		}
+
+		return;
+	}
+#endif
 
 	if (data->current.len) {
 		/* Interrupts for sending/receiving next byte */
@@ -374,3 +439,81 @@ int stm32_i2c_configure_timing(struct device *dev, u32_t clock)
 
 	return 0;
 }
+
+#if defined(CONFIG_I2C_SLAVE)
+bool i2c_stm32_slave_is_supported(struct device *dev)
+{
+	struct i2c_stm32_data *data = DEV_DATA(dev);
+
+	return !(data->slave_attached);
+}
+
+/* Attach and start I2C as slave */
+int i2c_stm32_slave_attach(struct device *dev, u8_t address,
+			   const struct i2c_slave_api *funcs,
+			   void *priv)
+{
+	const struct i2c_stm32_config *cfg = DEV_CFG(dev);
+	struct i2c_stm32_data *data = DEV_DATA(dev);
+	I2C_TypeDef *i2c = cfg->i2c;
+	u32_t bitrate_cfg;
+	int ret;
+
+	if (!funcs)
+		return -EINVAL;
+
+	bitrate_cfg = _i2c_map_dt_bitrate(cfg->bitrate);
+
+	ret = i2c_stm32_runtime_configure(dev, bitrate_cfg);
+	if (ret < 0) {
+		SYS_LOG_ERR("i2c: failure initializing");
+		return ret;
+	}
+	
+	data->slave_funcs = funcs;
+	data->slave_priv = priv;
+
+	LL_I2C_Enable(i2c);
+
+	LL_I2C_SetOwnAddress1(i2c, address << 1, LL_I2C_OWNADDRESS1_7BIT);
+	LL_I2C_EnableOwnAddress1(i2c);
+
+	data->slave_attached = true;
+
+	SYS_LOG_DBG("i2c: slave attached");
+
+	LL_I2C_EnableIT_ADDR(i2c);
+
+	return 0;
+}
+
+int i2c_stm32_slave_detach(struct device *dev, u8_t address,
+			   void *priv)
+{
+	const struct i2c_stm32_config *cfg = DEV_CFG(dev);
+	struct i2c_stm32_data *data = DEV_DATA(dev);
+	I2C_TypeDef *i2c = cfg->i2c;
+
+	if (!data->slave_attached)
+		return -EINVAL;
+
+	LL_I2C_DisableOwnAddress1(i2c);
+
+	LL_I2C_DisableIT_ADDR(i2c);
+	LL_I2C_DisableIT_NACK(i2c);
+	LL_I2C_DisableIT_TX(i2c);
+	LL_I2C_DisableIT_RX(i2c);
+	LL_I2C_DisableIT_STOP(i2c);
+	LL_I2C_DisableIT_ERR(i2c);
+
+	LL_I2C_ClearFlag_NACK(i2c);
+	LL_I2C_ClearFlag_STOP(i2c);
+	LL_I2C_ClearFlag_ADDR(i2c);
+
+	LL_I2C_Disable(i2c);
+
+	SYS_LOG_DBG("i2c: slave detached");
+
+	return 0;
+}
+#endif

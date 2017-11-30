@@ -18,7 +18,7 @@
 #define SYS_LOG_LEVEL CONFIG_SYS_LOG_I2C_LEVEL
 #include <logging/sys_log.h>
 
-static int i2c_stm32_runtime_configure(struct device *dev, u32_t config)
+int i2c_stm32_runtime_configure(struct device *dev, u32_t config)
 {
 	const struct i2c_stm32_config *cfg = DEV_CFG(dev);
 	struct i2c_stm32_data *data = DEV_DATA(dev);
@@ -54,9 +54,15 @@ static int i2c_stm32_transfer(struct device *dev, struct i2c_msg *msg,
 			      u8_t num_msgs, u16_t slave)
 {
 	const struct i2c_stm32_config *cfg = DEV_CFG(dev);
+	struct i2c_stm32_data *data = DEV_DATA(dev);
 	struct i2c_msg *current, *next;
 	I2C_TypeDef *i2c = cfg->i2c;
 	int ret = 0;
+
+#if defined(CONFIG_I2C_SLAVE)
+	if (data->slave_attached)
+		return -EBUSY;
+#endif
 
 	LL_I2C_Enable(i2c);
 
@@ -120,6 +126,11 @@ static int i2c_stm32_transfer(struct device *dev, struct i2c_msg *msg,
 static const struct i2c_driver_api api_funcs = {
 	.configure = i2c_stm32_runtime_configure,
 	.transfer = i2c_stm32_transfer,
+#if defined(CONFIG_I2C_SLAVE) && defined(CONFIG_I2C_STM32_V2)
+	.slave_is_supported = i2c_stm32_slave_is_supported,
+	.slave_attach = i2c_stm32_slave_attach,
+	.slave_detach = i2c_stm32_slave_detach,
+#endif
 };
 
 static int i2c_stm32_init(struct device *dev)
