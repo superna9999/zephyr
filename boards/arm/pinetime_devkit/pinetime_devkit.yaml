@@ -1,0 +1,11 @@
+identifier: pinetime_devkit
+name: PineTime Devkit
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+  - xtools
+ram: 64
+flash: 512
+supported:

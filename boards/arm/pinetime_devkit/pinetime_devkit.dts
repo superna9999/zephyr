@@ -1,0 +1,109 @@
+/*
+ * Copyright (c) 2019 Neil Armstrong
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <nordic/nrf52832_qfaa.dtsi>
+
+/ {
+	model = "PineTime Dev Kit";
+	compatible = "pinetime-devkit", "nordic,nrf52832-qfaa",
+		     "nordic,nrf52832";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		light1: led_0 {
+			gpios = <&gpio0 23 GPIO_INT_ACTIVE_LOW>;
+			label = "LIGHT1";
+		};
+		light2: led_1 {
+			gpios = <&gpio0 22 GPIO_INT_ACTIVE_LOW>;
+			label = "LIGHT2";
+		};
+		light3: led_2 {
+			gpios = <&gpio0 14 GPIO_INT_ACTIVE_LOW>;
+			label = "LIGHT3";
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			gpios = <&gpio0 13 GPIO_PUD_PULL_UP>;
+			label = "KEY IN";
+		};
+
+		button1: button_1 {
+			gpios = <&gpio0 15 GPIO_PUD_PULL_UP>;
+			label = "KEY";
+		};
+	};
+
+	/* These aliases are provided for compatibility with samples */
+	aliases {
+		sw0 = &button0;
+		led0 = &light1;
+		led1 = &light2;
+		led2 = &light3;
+		led0-green = &light1;
+		led1-red   = &light2;
+		led2-blue  = &light3;
+	};
+
+};
+
+&gpiote {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&i2c0 {
+	compatible = "nordic,nrf-twi";
+	status = "okay";
+	sda-pin = <6>;
+	scl-pin = <7>;
+};
+
+&flash0 {
+	/*
+	 * For more information, see:
+	 * http://docs.zephyrproject.org/latest/guides/dts/index.html#flash-partitions
+	 */
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0xc000>;
+		};
+		slot0_partition: partition@c000 {
+			label = "image-0";
+			reg = <0x0000C000 0x32000>;
+		};
+		slot1_partition: partition@3e000 {
+			label = "image-1";
+			reg = <0x0003E000 0x32000>;
+		};
+		scratch_partition: partition@70000 {
+			label = "image-scratch";
+			reg = <0x00070000 0xa000>;
+		};
+		storage_partition: partition@7a000 {
+			label = "storage";
+			reg = <0x0007a000 0x00006000>;
+		};
+	};
+};

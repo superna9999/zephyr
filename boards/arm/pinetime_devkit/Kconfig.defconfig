@@ -1,0 +1,22 @@
+# Kconfig - PineTime Devkit board configuration
+#
+# Copyright (c) 2019 Neil Armstrong
+#
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_PINETIME_DEVKIT
+
+config BOARD
+	default "pinetime_devkit"
+
+if I2C
+
+config I2C_0
+	default y
+
+endif # I2C
+
+config BT_CTLR
+	default BT
+
+endif # BOARD_PINETIME_DEVKIT
